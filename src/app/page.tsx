@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DigitalTwinChat from "@/components/digital-twin-chat";
 
 export default function Home() {
   const timeline = [
@@ -532,6 +533,8 @@ export default function Home() {
               </div>
             </div>
           </section>
+
+          <DigitalTwinChat />
         </main>
 
         <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-white/10 pt-8 text-xs text-slate-500">
