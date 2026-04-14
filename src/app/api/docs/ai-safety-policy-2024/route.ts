@@ -1,13 +1,20 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
+import { getDocSearchRoots, resolveDocAbsolutePath } from "@/lib/document-path";
 import { hasMemberAccess } from "@/lib/member-auth";
 
 export async function GET(request: Request) {
-  if (!hasMemberAccess(request)) {
+  if (!(await hasMemberAccess(request))) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const pdfPath = path.join(process.cwd(), "..", "AI safety policy 2024.pdf");
+  const fileName = "AI safety policy 2024.pdf";
+  const pdfPath = await resolveDocAbsolutePath(fileName);
+  if (!pdfPath) {
+    return new Response(
+      `${fileName} not found.\nExpected in one of:\n${getDocSearchRoots().join("\n")}`,
+      { status: 404 },
+    );
+  }
 
   try {
     const fileBuffer = await fs.readFile(pdfPath);
@@ -17,9 +24,13 @@ export async function GET(request: Request) {
         "Content-Type": "application/pdf",
         "Content-Disposition": "inline; filename=\"AI safety policy 2024.pdf\"",
         "Cache-Control": "no-store",
+        "Content-Length": String(fileBuffer.byteLength),
       },
     });
   } catch {
-    return new Response("AI safety policy 2024.pdf not found.", { status: 404 });
+    return new Response(
+      `${fileName} not found.\nExpected in one of:\n${getDocSearchRoots().join("\n")}`,
+      { status: 404 },
+    );
   }
 }

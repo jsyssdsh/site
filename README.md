@@ -3,6 +3,10 @@
 `Next.js` 기반의 프리미엄 개인 사이트입니다.  
 "Enterprise meets edgy" 톤으로 프로필, 커리어, 전문성, 포트폴리오(큐레이션 케이스 스터디)까지 한 번에 보여주도록 구성되어 있습니다.
 
+## 문서
+
+- 초보자용 구현 튜토리얼: `docs/tutorial-for-beginners.md`
+
 ## 프로젝트 소개
 
 - **메인 페이지**: 소개(About), 커리어 여정(Journey), 전문성(Expertise), 연락처(Contact)
@@ -29,6 +33,15 @@
 npm install
 ```
 
+### 1-1) 환경변수 설정
+
+```bash
+cp .env.local.example .env.local
+```
+
+- `.env.local`에 `OPENROUTER_API_KEY`, `MEMBER_AUTH_SECRET`를 설정하세요.
+- PDF 원문은 `private/docs`에 배치하세요.
+
 ### 2) 개발 서버 실행
 
 ```bash
@@ -52,15 +65,17 @@ npm run build
 
 ### 2) 가입 완료 처리
 
-- 이름/이메일/비밀번호 입력 후 제출
-- 브라우저 쿠키에 멤버 플래그 저장:
-  - `site_member=1`
+- 이름/이메일 입력 후 제출
+- 서버 API(`/api/auth/signup`)가 서명된 HttpOnly 세션 쿠키 발급:
+  - `site_member=<signed-token>`
 
 ### 3) 보호 라우트 접근
 
 - 보호 대상: `/case-studies/*`
 - 쿠키가 없으면 자동으로:
   - `/signup?next=<원래요청경로>` 로 리다이렉트
+
+> 참고: 현재 인증은 **데모용 멤버 게이트**입니다. 실서비스 배포 시에는 DB 기반 계정/세션, 비밀번호 해시, OAuth 등의 정식 인증 체계를 적용해야 합니다.
 
 ### 4) 가입 후 원래 페이지 복귀
 
@@ -75,6 +90,15 @@ npm run build
 - `/api/docs/ai-system-safety-engineering-2025/toc`
 - `/api/docs/ai-safety-policy-2024`
 - `/api/docs/ai-safety-policy-2024/toc`
+
+## PDF 파일 위치
+
+- 기본 경로: `web/private/docs`
+- 파일명:
+  - `AI safety 2023.pdf`
+  - `AI system safety engineering 2025.pdf`
+  - `AI safety policy 2024.pdf`
+- 커스텀 경로 사용 시: `DOCS_PDF_DIR` 환경변수를 설정하세요.
 
 ## 주요 디렉터리
 

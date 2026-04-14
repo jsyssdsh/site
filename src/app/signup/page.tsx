@@ -2,43 +2,59 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { MEMBER_COOKIE_NAME, MEMBER_COOKIE_VALUE } from "@/lib/member-auth";
 
 export default function SignupPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
 
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError("모든 항목을 입력해 주세요.");
+    if (!name.trim() || !email.trim()) {
+      setError("이름과 이메일을 입력해 주세요.");
       return;
     }
 
-    if (password.length < 6) {
-      setError("비밀번호는 6자 이상으로 설정해 주세요.");
-      return;
+    setSubmitting(true);
+
+    try {
+      const nextPath = new URLSearchParams(window.location.search).get("next") ?? "/";
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          nextPath,
+        }),
+      });
+
+      const payload = (await response.json()) as { nextPath?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "가입 처리에 실패했습니다.");
+      }
+
+      localStorage.setItem(
+        "site_member_profile",
+        JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          joinedAt: new Date().toISOString(),
+        }),
+      );
+
+      router.push(payload.nextPath ?? nextPath);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "가입 처리 중 오류가 발생했습니다.");
+    } finally {
+      setSubmitting(false);
     }
-
-    document.cookie = `${MEMBER_COOKIE_NAME}=${MEMBER_COOKIE_VALUE}; path=/; max-age=31536000; samesite=lax`;
-    localStorage.setItem(
-      "site_member_profile",
-      JSON.stringify({
-        name: name.trim(),
-        email: email.trim(),
-        joinedAt: new Date().toISOString(),
-      }),
-    );
-
-    const nextPath = new URLSearchParams(window.location.search).get("next") ?? "/";
-    router.push(nextPath);
-    router.refresh();
   };
 
   return (
@@ -52,6 +68,10 @@ export default function SignupPage() {
           <p className="text-sm text-slate-300">
             Curated 하위 페이지 접근을 위해 간단한 회원가입을 진행해 주세요.
           </p>
+          <p className="text-xs leading-relaxed text-amber-200/90">
+            데모용 접근 제어 페이지입니다. 실제 프로덕션 인증(계정 DB, 비밀번호 해시, OAuth)은
+            아직 적용되지 않았습니다.
+          </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -60,6 +80,7 @@ export default function SignupPage() {
               Name
             </label>
             <input
+              autoComplete="name"
               className="w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/60"
               id="name"
               value={name}
@@ -72,6 +93,7 @@ export default function SignupPage() {
               Email
             </label>
             <input
+              autoComplete="email"
               className="w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/60"
               id="email"
               type="email"
@@ -80,29 +102,14 @@ export default function SignupPage() {
             />
           </div>
 
-          <div className="space-y-1">
-            <label
-              className="text-xs uppercase tracking-[0.2em] text-slate-400"
-              htmlFor="password"
-            >
-              Password
-            </label>
-            <input
-              className="w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-300/60"
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </div>
-
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
           <button
-            className="w-full rounded-xl bg-sky-400 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-sky-300"
+            className="w-full rounded-xl bg-sky-400 px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-sky-300 disabled:opacity-60"
+            disabled={submitting}
             type="submit"
           >
-            회원가입 후 계속하기
+            {submitting ? "처리 중..." : "회원가입 후 계속하기"}
           </button>
         </form>
       </div>

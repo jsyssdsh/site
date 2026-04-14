@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MEMBER_COOKIE_NAME, MEMBER_COOKIE_VALUE } from "@/lib/member-auth";
+import { MEMBER_COOKIE_NAME, isValidMemberSessionToken } from "@/lib/member-auth";
 
-function isMember(request: NextRequest): boolean {
-  return request.cookies.get(MEMBER_COOKIE_NAME)?.value === MEMBER_COOKIE_VALUE;
+async function isMember(request: NextRequest): Promise<boolean> {
+  return isValidMemberSessionToken(request.cookies.get(MEMBER_COOKIE_NAME)?.value);
 }
 
-export function middleware(request: NextRequest) {
-  if (isMember(request)) {
+export async function middleware(request: NextRequest) {
+  if (await isMember(request)) {
     return NextResponse.next();
   }
 

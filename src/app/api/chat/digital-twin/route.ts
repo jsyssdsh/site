@@ -1,5 +1,4 @@
 import {
-  DEFAULT_OPENROUTER_MODEL,
   getOpenRouterRuntimeConfig,
 } from "@/lib/openrouter-config";
 
@@ -36,50 +35,83 @@ export async function POST(request: Request) {
       return Response.json({ error: "messages are required" }, { status: 400 });
     }
 
-    const { apiKey } = await getOpenRouterRuntimeConfig();
-    const model = DEFAULT_OPENROUTER_MODEL;
+    const { apiKey, model: primaryModel, fallbackModels } =
+      await getOpenRouterRuntimeConfig();
     if (!apiKey) {
       return Response.json(
-        { error: "OPENROUTER_API_KEY is missing in .emv/.env or runtime env." },
+        { error: "OPENROUTER_API_KEY is missing in .env.local/.env or runtime env." },
         { status: 500 },
       );
     }
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    const modelChain = [primaryModel, ...fallbackModels].filter(
+      (model, idx, arr) => model && arr.indexOf(model) === idx,
+    );
+
+    const callOpenRouter = async (model: string, maxTokens: number) =>
+      fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: DIGITAL_TWIN_SYSTEM_PROMPT },
+            ...messages,
+          ],
+          temperature: 0.4,
+          max_tokens: maxTokens,
+        }),
+      });
+
+    const attemptErrors: string[] = [];
+
+    for (const model of modelChain) {
+      const tokenPlan = [120, 72, 48];
+
+      for (const maxTokens of tokenPlan) {
+        let response = await callOpenRouter(model, maxTokens);
+        let errorText = response.ok ? "" : await response.text();
+
+        if (!response.ok && response.status === 402) {
+          const affordableMatch = errorText.match(/can only afford (\d+)/i);
+          const affordable = affordableMatch ? Number(affordableMatch[1]) : null;
+          if (affordable && affordable > 24) {
+            const emergencyTokens = Math.max(24, Math.min(64, affordable - 8));
+            response = await callOpenRouter(model, emergencyTokens);
+            errorText = response.ok ? "" : await response.text();
+          }
+        }
+
+        if (response.ok) {
+          const data = (await response.json()) as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+
+          const content = data.choices?.[0]?.message?.content?.trim();
+          if (content) {
+            return Response.json({ content, model });
+          }
+        }
+
+        attemptErrors.push(
+          `[${model} | max_tokens=${maxTokens}] status=${response.status} ${
+            errorText ? errorText.slice(0, 240) : "No content"
+          }`,
+        );
+      }
+    }
+
+    return Response.json(
+      {
+        error:
+          "OpenRouter 요청이 모두 실패했습니다. 잠시 후 다시 시도하거나 API 키 한도/모델 접근 권한을 확인해 주세요.",
+        detail: attemptErrors.join("\n\n"),
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: DIGITAL_TWIN_SYSTEM_PROMPT },
-          ...messages,
-        ],
-        temperature: 0.4,
-        max_tokens: 180,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return Response.json(
-        { error: "OpenRouter request failed", detail: errorText },
-        { status: 502 },
-      );
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    const content = data.choices?.[0]?.message?.content?.trim();
-    if (!content) {
-      return Response.json({ error: "No response content from model." }, { status: 502 });
-    }
-
-    return Response.json({ content, model });
+      { status: 502 },
+    );
   } catch {
     return Response.json({ error: "Failed to process digital twin chat." }, { status: 500 });
   }

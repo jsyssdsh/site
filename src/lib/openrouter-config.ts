@@ -4,6 +4,10 @@ import path from "node:path";
 type KeyValue = Record<string, string>;
 export const DEFAULT_OPENROUTER_MODEL =
   "anthropic/claude-opus-4.6-fast";
+export const DEFAULT_OPENROUTER_FALLBACK_MODELS = [
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "openai/gpt-4o-mini",
+];
 
 function parseEnvLike(content: string): KeyValue {
   return content.split("\n").reduce<KeyValue>((acc, rawLine) => {
@@ -29,21 +33,41 @@ async function readEnvFile(filePath: string): Promise<KeyValue> {
   }
 }
 
+function parseModelList(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 export async function getOpenRouterRuntimeConfig() {
-  const projectRoot = path.join(process.cwd(), "..");
-  const emvVars = await readEnvFile(path.join(projectRoot, ".emv"));
+  const projectRoot = process.cwd();
+  const envLocalVars = await readEnvFile(path.join(projectRoot, ".env.local"));
   const envVars = await readEnvFile(path.join(projectRoot, ".env"));
 
   const apiKey =
     process.env.OPENROUTER_API_KEY ??
-    emvVars.OPENROUTER_API_KEY ??
+    envLocalVars.OPENROUTER_API_KEY ??
     envVars.OPENROUTER_API_KEY;
 
   const model =
     process.env.OPENROUTER_MODEL ??
-    emvVars.OPENROUTER_MODEL ??
+    envLocalVars.OPENROUTER_MODEL ??
     envVars.OPENROUTER_MODEL ??
     DEFAULT_OPENROUTER_MODEL;
 
-  return { apiKey, model };
+  const fallbackModelsRaw =
+    process.env.OPENROUTER_FALLBACK_MODELS ??
+    envLocalVars.OPENROUTER_FALLBACK_MODELS ??
+    envVars.OPENROUTER_FALLBACK_MODELS;
+
+  const fallbackModels = parseModelList(fallbackModelsRaw);
+
+  return {
+    apiKey,
+    model,
+    fallbackModels:
+      fallbackModels.length > 0 ? fallbackModels : DEFAULT_OPENROUTER_FALLBACK_MODELS,
+  };
 }
